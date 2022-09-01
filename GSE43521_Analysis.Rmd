@@ -1,0 +1,372 @@
+---
+title: "Research_Test_Proj2"
+author: "Jack Karbowski"
+date: "5/27/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(GEOquery)
+library(tidyverse)
+library(BiocManager)
+library(limma)
+library(stringr)
+library(pheatmap)
+library(fgsea)
+library(data.table)
+```
+
+
+
+```{r}
+gse43<- getGEO("GSE43261")
+
+gse43
+
+head(featureData(gse43[[1]]))
+
+#downloading micro array data from omnibus
+```
+
+
+```{r}
+head((featureData(gse43[[1]])))
+
+
+View((featureData(gse43[[1]])))
+
+#use match function 
+# results$symbol <-fData$Symbol[match(results$ID, fData$ID)]
+```
+
+
+```{r}
+length(gse43)
+gse43<- gse43[[1]]
+gse43
+
+#save gse43 as expression set 
+```
+
+
+```{r}
+pData(gse43) #sample info 
+exprs(gse43) [1,] #gene expression info
+```
+
+
+```{r}
+pData(gse43)$data_processing[1]
+
+#check how data was processed
+#seems like data was proccesed, but still has high values 
+```
+
+
+```{r}
+summary(exprs(gse43)) #check summary of gene expression data, this data looks like it has not been log transformed because of values above 16?
+
+
+exprs(gse43) <- log2(exprs(gse43))
+#log transform data 
+```
+
+
+```{r}
+#check the log transformed data, summary and visualization 
+
+summary(exprs(gse43))
+
+boxplot(exprs(gse43))
+```
+
+
+```{r}
+sampledata<- pData(gse43) #save pData into data frame
+
+head(sampledata)
+```
+
+```{r}
+table(sampledata$characteristics_ch1.5) #table of sampledata
+
+#CHECK THE CONTROL TO SEE IF HEALTHY (cant find too much information about this)
+
+#Make excel sheet, look at papers for number of groups, data processing analysis, and treatment 
+```
+
+
+
+```{r}
+sampledata<- select(sampledata,  characteristics_ch1.5)
+
+#selecting columns that we need for analysis 
+#NOTE: got rid of 1.4!!!
+```
+
+
+```{r}
+head(sampledata)
+
+dim(sampledata)
+
+sampledata$characteristics_ch1.5
+```
+
+Step below probably not needed, want to see difference in responder, control, and resistant instead of just treated vs untreated 
+```{r}
+sampledata$treatment_group <- ""
+for(i in 1:nrow(sampledata)){
+  if(str_detect(sampledata$characteristics_ch1.5[i], "control"))
+  {sampledata$treatment_group[i] <- "Untreated"}
+  
+  if(str_detect(sampledata$characteristics_ch1.5[i], "Responder"))
+  {sampledata$treatment_group[i] <- "Treated"}
+  
+  if(str_detect(sampledata$characteristics_ch1.5[i], "Resistant"))
+  {sampledata$treatment_group[i] <- "Treated"}
+}
+
+#creating a new column that groups the response into a treatment 
+
+# USE ifelse function and try to create this column in one line 
+
+
+```
+
+```{r}
+#try using ifelse 
+
+#sampledata$treatment_group_2<- ifelse(sampledata$characteristics_ch1.5== "control", "Untreated")
+```
+
+
+```{r}
+corMatrix<- cor(exprs(gse43), use = "c")
+pheatmap(corMatrix)
+
+#try to add col dat
+```
+
+
+
+```{r}
+rownames(sampledata)
+colnames(corMatrix)
+
+#checking to see if rownames of sampledata match col names of corMatrix 
+```
+
+
+
+```{r}
+pheatmap(corMatrix, annotation_col= sampledata)
+#use brackets, fix 
+```
+
+limma differential expression steps
+```{r}
+design_data<- model.matrix( ~0 +sampledata$characteristics_ch1.5)
+# creating a matrix from treatment_group
+
+colnames(design_data)<- c("Control", "Responder", "Resistant")
+#changing column names (treated with fluoxitine)
+
+design_data
+```
+
+```{r}
+quantile(exprs(gse43))
+
+exprs_cutoff<- 3.9
+
+#exprs_cutoff<- median(exprs(gse43)) 
+#, this cutoff might be too harsh so lets take it down to genes expressed above the 25% quartile 
+
+
+#removing genes that have low expression (helps prevent type 1 error I think)
+
+# 
+```
+
+
+```{r}
+genes_expressed <- exprs(gse43) > exprs_cutoff
+
+#saving the genes that fall above the median cutoff into genes_expressed
+```
+
+
+```{r}
+genes_retained<- rowSums(genes_expressed)>3
+
+#saving the genes that are expressed in more than three samples 
+```
+
+```{r}
+table(genes_retained) 
+
+dim(genes_expressed)
+
+#checking how many genes are removed, seems about right because of the median cutoff
+```
+
+```{r}
+gse43<-gse43[genes_retained,]
+#saving the genes we kept into the gse43 expression set 
+
+#might also want to check for extreme values in another chunk 
+```
+
+```{r}
+lm_fit43<- lmFit(exprs(gse43), design_data)
+
+head(lm_fit43$coefficients)
+```
+
+
+
+
+```{r}
+contrasts <- makeContrasts(Responder-Control , Resistant- Control, Responder - Resistant, levels = design_data)  
+
+#comparsions between Responder genes, Control genes, and Resistant genes 
+
+
+lm_fit43_2 <- contrasts.fit(lm_fit43, contrasts)
+lm_fit43_2 <- eBayes(lm_fit43_2)
+
+
+topTable(lm_fit43_2)
+topTable1 <- topTable(lm_fit43_2, coef=1)
+```
+
+
+
+```{r}
+summary(decideTests(lm_fit43_2))
+table(decideTests(lm_fit43_2))
+
+#view of the overall differnetial expression between the three groups 
+#seems about right, most genes are not significant 
+
+
+#gene set enrichment on responder vs control and responder vs resistant 
+#try histogram on result of p values that come out of pvalue results$pvalue[1], take a lookat head of results$p
+```
+
+
+
+
+```{r}
+gse43_gene_annotation <- fData(gse43)
+head(gse43_gene_annotation)
+
+gse43_gene_annotation <- select(gse43_gene_annotation,ID,GB_ACC)
+lm_fit43_2$genes <- gse43_gene_annotation
+
+topTable(lm_fit43_2)
+# visualizing gene names vs their ID's, and then saving them into the table with the differential expression data
+```
+
+
+Volcano Plot 
+```{r}
+#TRY TO COLOR THIS VOLCANO PLOT WITH SIG UP AND DOWN GENES 
+gse43_gene_df <- topTable(lm_fit43_2, coef=1, number = Inf)
+
+
+ggplot(gse43_gene_df,aes(x =logFC,y=B)) +geom_point()
+
+
+#volcano plot with genes above p value of 0.05 and and foldchain greater than 1
+pvalue_cutoff <- 0.05
+foldchain_cutoff <- 1
+
+gse43_gene_df %>% 
+mutate(Significant = P.Value < pvalue_cutoff, abs(logFC) > foldchain_cutoff ) %>% 
+ggplot(aes(x = logFC, y = B, col= Significant)) +geom_point()
+```
+
+
+
+```{r}
+#gse43_gene_df %>% mutate(Significant = P.Value < pvalue_cutoff, abs(logFC) > foldchain_cutoff ) %>% 
+#ggplot(aes(x = logFC, y = B, col= Significant, label= GB_ACC)) + geom_point
+
+#plotly tutorial 
+#ggrepel library
+#possibly rank
+```
+
+
+
+
+
+
+
+TRY GENE ENRICHMENT ANALYSIS
+```{r}
+#BiocManager::install("clusterProfiler")
+#BiocManager::install("pathview")
+#BiocManager::install("enrichplot")
+```
+
+
+```{r}
+gse43_fdata<- (featureData(gse43[[1]]))
+
+gse43_genesymbol<- gse43_fdata@data$`Gene Symbol`
+
+gse43_AfyID<- gse43_fdata@data$ID
+
+
+```
+
+
+```{r}
+#use match function 
+
+ gse43_gene_df$Symbol<-gse43_fdata$`Gene Symbol` [match(gse43_gene_df$ID, gse43_fdata$ID)]
+
+sum(is.na(gse43_gene_df$Symbol))
+```
+
+```{r}
+gse43_gene_df
+gse43_gene_df <- na.omit(gse43_gene_df)
+gse43_gene_df <- gse43_gene_df[!duplicated(gse43_gene_df$Symbol),]
+stat<- gse43_gene_df$t
+names(stat)<- gse43_gene_df$Symbol
+
+gse43_gene_df
+```
+
+
+
+```{r}
+gmt.file <- system.file("extdata", "mouse.reactome.gmt", package="fgsea")
+rnk.file <- system.file("extdata", "naive.vs.th1.rnk", package="fgsea")
+```
+
+
+```{r}
+ranks <- read.table(rnk.file,
+                    header=TRUE, colClasses = c("character", "numeric"))
+ranks <- setNames(ranks$t, ranks$ID)
+str(ranks)
+
+pathways <- gmtPathways(gmt.file)
+```
+
+
+```{r}
+fgseaRes <- fgsea(pathways, ranks, minSize=5, maxSize=500)
+View(fgseaRes)
+
+
+```

@@ -1,0 +1,387 @@
+---
+title: "GSE128387"
+author: "Jack Karbowski"
+date: "6/17/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(GEOquery)
+library(tidyverse)
+library(BiocManager)
+library(limma)
+library(stringr)
+library(pheatmap)
+library(fgsea)
+library(data.table)
+```
+
+```{r}
+gse128<- getGEO("GSE128387")
+
+gse128
+
+
+#downloading micro array data from omnibus
+```
+
+
+```{r}
+head((featureData(gse128[[1]])))
+
+
+View((featureData(gse128[[1]])))
+
+```
+
+
+```{r}
+length(gse128)
+
+gse128<- gse128[[1]]
+
+#save gse128 as expression set 
+```
+
+```{r}
+pData(gse128) #sample info 
+exprs(gse128) [1,] #gene expression info
+```
+
+
+
+```{r}
+pData(gse128)$data_processing[1]
+
+summary(exprs(gse128)) 
+
+#check how data was processed
+#seems like data was proccesed, make a plot below to visualize this 
+```
+
+
+```{r}
+#check the log transformed data, summary and visualization 
+
+summary(exprs(gse128))
+
+boxplot(exprs(gse128))
+```
+
+
+```{r}
+sampledata<- pData(gse128) #save pData into data frame
+
+view(sampledata)
+```
+
+
+```{r}
+sampledata$Pair<- case_when(sampledata$title == "Sample of patient 2, basal sample"~ 2, 
+ sampledata$title == "Sample of patient 2, sample al 8 weeks"~ 2, 
+ 
+ sampledata$title == "Sample of patient 3, basal sample"~ 3,
+ sampledata$title == "Sample of patient 3, sample al 8 weeks"~ 3, 
+ 
+ sampledata$title == "Sample of patient 5, basal sample"~ 5, 
+ sampledata$title == "Sample of patient 5, sample al 8 weeks"~ 5, 
+ 
+ sampledata$title == "Sample of patient 6, basal sample"~ 6,
+ sampledata$title == "Sample of patient 6, sample al 8 weeks"~ 6, 
+ 
+ sampledata$title == "Sample of patient 7, basal sample"~ 7, 
+ sampledata$title == "Sample of patient 7, sample al 8 weeks"~ 7, 
+ 
+ sampledata$title == "Sample of patient 8, basal sample"~ 8, 
+ sampledata$title == "Sample of patient 8, sample al 8 weeks"~ 8, 
+ 
+ sampledata$title == "Sample of patient 9, sample al 8 weeks"~ 9, 
+ sampledata$title == "Sample of patient 9, basal sample"~ 9, 
+ 
+ sampledata$title == "Sample of patient 10, basal sample"~ 10, 
+ sampledata$title == "Sample of patient 10, sample al 8 weeks"~ 10, 
+ 
+ sampledata$title == "Sample of patient 11, basal sample"~ 11, 
+ sampledata$title == "Sample of patient 11, sample al 8 weeks"~ 11, 
+ 
+ sampledata$title == "Sample of patient 13, basal sample"~ 13, 
+ sampledata$title == "Sample of patient 13, sample al 8 weeks"~ 13, 
+ 
+ sampledata$title == "Sample of patient 14, basal sample"~ 14, 
+ sampledata$title == "Sample of patient 14, sample al 8 weeks"~ 14, 
+ 
+ sampledata$title == "Sample of patient 15, basal sample"~ 15, 
+ sampledata$title == "Sample of patient 15, sample al 8 weeks"~ 15, 
+ 
+ sampledata$title == "Sample of patient 16, basal sample"~ 16, 
+ sampledata$title == "Sample of patient 16, sample al 8 weeks"~ 16, 
+ 
+ sampledata$title == "Sample of patient 17, basal sample"~ 17, 
+ sampledata$title == "Sample of patient 17, sample al 8 weeks"~ 17, 
+ 
+ sampledata$title == "Sample of patient 18, basal sample"~ 18, 
+ sampledata$title == "Sample of patient 18, sample al 8 weeks"~ 18, 
+ 
+ sampledata$title == "Sample of patient 19, basal sample"~ 19, 
+ sampledata$title == "Sample of patient 19, sample al 8 weeks"~ 19, 
+ 
+ sampledata$title == "Sample of patient 20, basal sample"~ 20, 
+ sampledata$title == "Sample of patient 20, sample al 8 weeks"~ 20 ,
+ 
+ sampledata$title == "Sample of patient 12, basal sample"~ 12, 
+ sampledata$title == "Sample of patient 12, sample al 8 weeks"~ 12, 
+ 
+ sampledata$title == "Sample of patient 4, basal sample"~ 4)
+
+
+
+
+```
+
+
+```{r}
+sampledata$Treatment_Time<- case_when(sampledata$title == "Sample of patient 2, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 3, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 4, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 5, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 6, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 7, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 8, basal sample"~ "inital",
+
+sampledata$title == "Sample of patient 9, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 10, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 11, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 12, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 13, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 14, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 15, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 16, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 17, basal sample"~ "inital",
+
+sampledata$title == "Sample of patient 18, basal sample"~ "inital",
+
+sampledata$title == "Sample of patient 19, basal sample"~ "inital",
+
+sampledata$title == "Sample of patient 20, basal sample"~ "inital", 
+
+sampledata$title == "Sample of patient 2, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 3, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 4, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 5, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 6, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 7, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 8, sample al 8 weeks"~ "8 Weeks",
+
+sampledata$title == "Sample of patient 9, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 10, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 11, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 12, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 13, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 14, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 15, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 16, sample al 8 weeks"~ "8 Weeks", 
+
+sampledata$title == "Sample of patient 17, sample al 8 weeks"~ "8 Weeks",
+
+sampledata$title == "Sample of patient 18, sample al 8 weeks"~ "8 Weeks",
+
+sampledata$title == "Sample of patient 19, sample al 8 weeks"~ "8 Weeks",
+
+sampledata$title == "Sample of patient 20, sample al 8 weeks"~ "8 Weeks")
+
+```
+
+
+
+```{r}
+sampledata<- dplyr::select(sampledata,  title , Pair, Treatment_Time)
+
+sampledata
+#selecting columns that we need for analysis 
+#try Gsub 
+```
+
+
+```{r}
+Pair <- factor(sampledata$Pair)
+
+Treatment_Time<- factor(sampledata$Treatment_Time)
+```
+
+
+```{r}
+design_128<- model.matrix( ~Pair +Treatment_Time)
+
+design_128
+```
+
+
+```{r}
+fit128<- lmFit(exprs(gse128), design_128)
+
+head(fit128$coefficients)
+```
+
+
+
+
+
+```{r}
+fit128_2 <- eBayes(fit128)
+
+
+topTable(fit128_2)
+topTable1 <- topTable(fit128_2, coef="Treatment_Timeinital")
+
+summary(decideTests(fit128_2))
+table(decideTests(fit128_2))
+
+topTable1
+#NUMBER TOPTABLE 
+
+?topTable
+#Venn Diagrams later 
+
+#gse128_df <- topTable(fit128_2, coef="Treatment_Timeinital", number = Inf)
+
+```
+
+
+
+GSE ANALYSIS!!!!!!!!!!!
+
+
+
+```{r}
+fData(gse128)
+
+head(fit128_2)
+```
+
+
+```{r}
+gse128_gene_annotation<- fData(gse128)
+head(gse128_gene_annotation)
+
+gse128_gene_annotation <- dplyr::select(gse128_gene_annotation,ID,gene_assignment)
+
+fit128_2$genes <- gse128_gene_annotation
+topTable(fit128_2)
+
+gse128_df <- topTable(fit128_2, coef="Treatment_Timeinital", number = Inf)
+
+gse128_df
+
+head(fit128_2$coefficients)
+
+```
+
+
+```{r}
+gse128<- getGEO("GSE128387")
+
+
+library(DBI)
+library("pd.hugene.2.1.st")
+
+```
+
+```{r}
+
+gse128_fdata<- (featureData(gse128[[1]]))
+
+gse128_fdata$GeneSymbol<-mapIds(org.Hs.eg.db, keys= gse128_fdata@data$SPOT_ID , column="SYMBOL", keytype="ENSEMBLTRANS")
+
+sum(is.na(gse128_fdata@data$GeneSymbol))
+
+
+gse128_genesymbol<- gse128_fdata@data$`gene_assignment`
+
+
+
+```
+
+
+```{r}
+#use match function 
+
+ gse128_df$Symbol<-gse128_fdata$`GeneSymbol` [match(gse128_df$ID, gse128_fdata$ID)]
+
+```
+
+```{r}
+gse128_df_ordered<- gse128_df[order(gse128_df$AveExpr, decreasing=TRUE ),]
+
+
+
+gse128_df_ordered <- gse128_df_ordered[!duplicated(gse128_df_ordered$GeneSymbol),]
+stat<- gse128_df_ordered$t
+names(stat)<- gse128_df_ordered$GeneSymbol
+
+gse128_df_ordered <- na.omit(gse128_df_ordered)
+
+gse128_df
+
+head(stat)
+```
+
+
+
+
+
+
+
+
+```{r}
+
+
+pathways_128 <- gmtPathways("c2.cp.reactome.v7.4.symbols.gmt")
+```
+
+
+```{r}
+
+#table(names(stat)%in%unlist(pathways_128))
+```
+
+
+```{r}
+fgseaRes128 <- fgsea(pathways_128, stat, minSize=5, maxSize=500)
+View(fgseaRes128)
+
+```
+
+
+
+

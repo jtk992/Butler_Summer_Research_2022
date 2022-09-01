@@ -1,0 +1,763 @@
+---
+title: "GSE84185_Analysis"
+author: "Jack Karbowski"
+date: "6/13/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(GEOquery)
+library(tidyverse)
+library(BiocManager)
+library(limma)
+library(stringr)
+library(pheatmap)
+library(fgsea)
+library(data.table)
+```
+
+```{r}
+gse84<- getGEO("GSE84185")
+
+gse84
+
+head(featureData(gse84[[1]]))
+
+#downloading micro array data from omnibus
+```
+
+```{r}
+head((featureData(gse84[[1]])))
+
+
+#View((featureData(gse84[[1]])))
+
+#use match function 
+# results$symbol <-fData$Symbol[match(results$ID, fData$ID)]
+```
+
+```{r}
+length(gse84)
+gse84<- gse84[[1]]
+gse84
+#save as expression set 
+```
+
+
+
+```{r}
+pData(gse84) #sample info 
+exprs(gse84) [1,] #gene expression info
+```
+
+
+```{r}
+pData(gse84)$data_processing[1]
+
+#check how data was processed
+#seems like data was proccesed using qunatile normalization 
+```
+
+
+
+```{r}
+sampledata<- pData(gse84) #save pData into data frame
+
+#View(sampledata)
+```
+
+```{r}
+gse84_Dentate<- gse84[, 1:32]
+
+summary(exprs(gse84_Dentate))
+
+boxplot(exprs(gse84_Dentate))
+```
+
+
+
+
+```{r}
+sampledata_Dentate<- sampledata[1:32, ]
+
+sampledata_Cingulate<- sampledata[33:64, ]
+
+sampledata_Blood<- sampledata[65:96, ]
+
+#split sample data into three seperate groups, Dentate, Cingulate, and Whole blood 
+```
+
+
+```{r}
+sampledata_Dentate<- select(sampledata_Dentate, source_name_ch1, characteristics_ch1.3)
+
+
+```
+
+
+
+```{r}
+corMatrix<- cor(exprs(gse84_Dentate), use = "c")
+pheatmap(corMatrix)
+```
+
+```{r}
+rownames(sampledata_Dentate)
+colnames(corMatrix)
+
+#checking to see if rownames of sampledata match col names of corMatrix 
+```
+
+
+
+```{r}
+pheatmap(corMatrix, annotation_col= sampledata_Dentate)
+#use brackets, fix 
+```
+
+
+
+```{r}
+design_data_Dentate<- model.matrix( ~0 +sampledata_Dentate$source_name_ch1)
+# creating a matrix from treatment_group
+
+colnames(design_data_Dentate)<- c("Control", "Unstressed_Fluoxetine_Treated", "Stressed_Fluoxetine_Treated", "Stressed")
+#changing column names (treated with fluoxitine)
+
+design_data_Dentate
+```
+
+```{r}
+quantile(exprs(gse84_Dentate))
+
+exprs_cutoff_Dentate<- 4.637468
+
+genes_expressed_Dentate <- exprs(gse84_Dentate) > exprs_cutoff_Dentate
+```
+
+
+```{r}
+genes_retained_Dentate<- rowSums(genes_expressed_Dentate)>3
+```
+
+
+```{r}
+table(genes_retained_Dentate) 
+
+dim(genes_expressed_Dentate)
+```
+
+```{r}
+lm_fit_Dentate<- lmFit(exprs(gse84_Dentate), design_data_Dentate)
+
+head(lm_fit_Dentate$coefficients)
+```
+
+```{r}
+contrasts_Dentate <- makeContrasts(
+Stressed - Control, 
+Unstressed_Fluoxetine_Treated - Control,
+Unstressed_Fluoxetine_Treated - Stressed_Fluoxetine_Treated,
+Stressed_Fluoxetine_Treated - Stressed,
+                           
+levels = design_data_Dentate)  
+
+#comparsions between the genes of the four groups 
+
+
+lm_fit_Dentate_2 <- contrasts.fit(lm_fit_Dentate, contrasts_Dentate)
+lm_fit_Dentate_2 <- eBayes(lm_fit_Dentate_2)
+
+
+topTable(lm_fit_Dentate_2)
+topTable1 <- topTable(lm_fit_Dentate_2, coef=1)
+```
+
+```{r}
+summary(decideTests(lm_fit_Dentate_2))
+table(decideTests(lm_fit_Dentate_2))
+
+#view of the overall differnetial expression between the three groups 
+```
+
+
+
+
+GSEA DENTATE !!!!
+```{r}
+fData(gse84_Dentate)
+
+head(lm_fit_Dentate_2)
+```
+
+
+```{r}
+gse84Dentate_gene_annotation<- fData(gse84_Dentate)
+head(gse84Dentate_gene_annotation)
+
+gse84Dentate_gene_annotation <- select(gse84Dentate_gene_annotation,GENE_ID,GENE_SYMBOL)
+
+lm_fit_Dentate_2$genes <- gse84Dentate_gene_annotation
+topTable(lm_fit_Dentate_2)
+
+gse84Dentate_df <- topTable(lm_fit_Dentate_2, coef=1, number = Inf)
+
+gse84Dentate_df
+
+head(lm_fit_Dentate_2$coefficients)
+
+all(rownames(fData(gse84_Dentate))== rownames(lm_fit_Dentate_2$coefficients))
+```
+
+
+```{r}
+gse84<- getGEO("GSE84185")
+
+```
+
+```{r}
+
+gse84_fdata<- (featureData(gse84[[1]]))
+
+gse84_genesymbol<- gse84_fdata@data$`GENE_SYMBOL`
+
+
+```
+
+
+```{r}
+#use match function 
+
+ gse84Dentate_df$Symbol<-gse84_fdata$`GENE_SYMBOL` [match(gse84Dentate_df$GENE_ID, gse84_fdata$GENE_ID)]
+
+```
+
+```{r}
+gse84Dentate_df
+
+
+gse84Dentate_df <- gse84Dentate_df[!duplicated(gse84Dentate_df$Symbol),]
+stat<- gse84Dentate_df$t
+names(stat)<- gse84Dentate_df$GENE_ID
+
+gse84Dentate_df <- na.omit(gse84Dentate_df)
+
+gse84Dentate_df
+
+head(stat)
+```
+
+
+
+```{r}
+gmt.file <- system.file("extdata", "mouse.reactome.gmt", package="fgsea")
+rnk.file <- system.file("extdata", "naive.vs.th1.rnk", package="fgsea")
+```
+
+
+```{r}
+ranks<- read.table(rnk.file,
+                    header=TRUE, colClasses = c("character", "numeric"))
+ranks<- setNames(ranks$t, ranks$ID)# this is practice data
+str(ranks)
+
+pathways_Dentate <- gmtPathways(gmt.file)
+
+head(ranks)
+```
+
+```{r}
+
+table(names(stat)%in%unlist(pathways_Dentate))
+```
+
+
+```{r}
+fgseaResDentate <- fgsea(pathways_Dentate, stat, minSize=5, maxSize=500)
+head(fgseaResDentate)
+
+```
+
+
+
+
+
+
+
+
+CINGULATE ANALYSIS BELOW 
+
+```{r}
+gse84<- getGEO("GSE84185")
+gse84<- gse84[[1]]
+gse84_Cingulate<- gse84[, 33:64]
+
+summary(exprs(gse84_Cingulate))
+
+boxplot(exprs(gse84_Cingulate))
+```
+
+
+
+```{r}
+sampledata_Cingulate<- select(sampledata_Cingulate, source_name_ch1, characteristics_ch1.3)
+
+```
+
+
+
+```{r}
+corMatrix<- cor(exprs(gse84_Cingulate), use = "c")
+pheatmap(corMatrix)
+```
+
+```{r}
+rownames(sampledata_Cingulate)
+colnames(corMatrix)
+
+#checking to see if rownames of sampledata match col names of corMatrix 
+```
+
+
+
+
+```{r}
+pheatmap(corMatrix, annotation_col= sampledata_Cingulate)
+```
+
+
+
+```{r}
+design_data_Cingulate<- model.matrix( ~0 +sampledata_Cingulate$source_name_ch1)
+# creating a matrix from treatment_group
+
+colnames(design_data_Cingulate)<- c("Control", "Unstressed_Fluoxetine_Treated", "Stressed_Fluoxetine_Treated", "Stressed")
+#changing column names (treated with fluoxitine)
+
+design_data_Cingulate
+```
+
+```{r}
+quantile(exprs(gse84_Cingulate))
+
+exprs_cutoff_Cingulate<- 4.637527
+
+genes_expressed_Cingulate <- exprs(gse84_Cingulate) > exprs_cutoff_Cingulate
+```
+
+
+
+```{r}
+genes_retained_Cingulate<- rowSums(genes_expressed_Cingulate)>3
+```
+
+
+```{r}
+table(genes_retained_Cingulate) 
+
+dim(genes_expressed_Cingulate)
+```
+
+
+
+
+```{r}
+lm_fit_Cingulate<- lmFit(exprs(gse84_Cingulate), design_data_Cingulate)
+
+head(lm_fit_Cingulate$coefficients)
+```
+
+```{r}
+contrasts_Cingulate <- makeContrasts(
+Stressed-Control, 
+  
+Unstressed_Fluoxetine_Treated - Control,
+Unstressed_Fluoxetine_Treated - Stressed_Fluoxetine_Treated,
+Unstressed_Fluoxetine_Treated- Stressed,
+
+Stressed_Fluoxetine_Treated - Control, 
+Stressed_Fluoxetine_Treated-Stressed, 
+
+levels = design_data_Cingulate)  
+
+#comparsions between the genes of the four groups 
+
+
+lm_fit_Cingulate_2 <- contrasts.fit(lm_fit_Cingulate, contrasts_Cingulate)
+lm_fit_Cingulate_2 <- eBayes(lm_fit_Cingulate_2)
+
+
+topTable(lm_fit_Cingulate_2)
+topTable1 <- topTable(lm_fit_Cingulate_2, coef=1)
+```
+
+
+
+```{r}
+summary(decideTests(lm_fit_Cingulate_2))
+table(decideTests(lm_fit_Cingulate_2))
+
+#view of the overall differnetial expression between the four groups 
+```
+
+
+
+
+GSEA CINGULATE !!!!
+
+```{r}
+fData(gse84_Cingulate)
+
+head(lm_fit_Cingulate_2)
+```
+
+
+```{r}
+gse84Cingulate_gene_annotation<- fData(gse84_Cingulate)
+head(gse84Cingulate_gene_annotation)
+
+gse84Cingulate_gene_annotation <- select(gse84Cingulate_gene_annotation,GENE_ID,GENE_SYMBOL)
+
+lm_fit_Cingulate_2$genes <- gse84Cingulate_gene_annotation
+topTable(lm_fit_Cingulate_2)
+
+gse84Cingulate_df <- topTable(lm_fit_Cingulate_2, coef=1, number = Inf)
+
+gse84Cingulate_df
+
+head(lm_fit_Cingulate_2$coefficients)
+
+all(rownames(fData(gse84_Cingulate))== rownames(lm_fit_Cingulate_2$coefficients))
+```
+
+
+```{r}
+gse84<- getGEO("GSE84185")
+
+```
+
+```{r}
+
+gse84_fdata<- (featureData(gse84[[1]]))
+
+gse84_genesymbol<- gse84_fdata@data$`GENE_SYMBOL`
+
+
+```
+
+
+```{r}
+#use match function 
+
+ gse84Cingulate_df$Symbol<-gse84_fdata$`GENE_SYMBOL` [match(gse84Cingulate_df$GENE_ID, gse84_fdata$GENE_ID)]
+
+```
+
+```{r}
+gse84Cingulate_df
+
+
+gse84Cingulate_df <- gse84Cingulate_df[!duplicated(gse84Cingulate_df$Symbol),]
+stat<- gse84Cingulate_df$t
+names(stat)<- gse84Cingulate_df$GENE_ID
+
+gse84Cingulate_df <- na.omit(gse84Cingulate_df)
+
+gse84Cingulate_df
+
+head(stat)
+```
+
+
+
+```{r}
+gmt.file <- system.file("extdata", "mouse.reactome.gmt", package="fgsea")
+rnk.file <- system.file("extdata", "naive.vs.th1.rnk", package="fgsea")
+```
+
+
+```{r}
+ranks<- read.table(rnk.file,
+                    header=TRUE, colClasses = c("character", "numeric"))
+ranks<- setNames(ranks$t, ranks$ID)# this is practice data
+str(ranks)
+
+pathways_Cingulate <- gmtPathways(gmt.file)
+
+head(ranks)
+```
+
+```{r}
+
+table(names(stat)%in%unlist(pathways_Cingulate))
+```
+
+
+```{r}
+fgseaResCingulate <- fgsea(pathways_Cingulate, stat, minSize=5, maxSize=500)
+head(fgseaResCingulate)
+
+```
+
+
+
+
+
+
+
+
+
+
+WHOLE BLOOD ANALYSIS BELOW 
+```{r}
+gse84<- getGEO("GSE84185")
+gse84<- gse84[[1]]
+gse84_Blood<- gse84[, 65:96]
+
+summary(exprs(gse84_Blood))
+
+boxplot(exprs(gse84_Blood))
+```
+
+
+
+```{r}
+sampledata_Blood<- select(sampledata_Blood, source_name_ch1, characteristics_ch1.3)
+
+```
+
+
+
+```{r}
+corMatrix<- cor(exprs(gse84_Blood), use = "c")
+pheatmap(corMatrix)
+```
+
+```{r}
+rownames(sampledata_Blood)
+colnames(corMatrix)
+
+#checking to see if rownames of sampledata match col names of corMatrix 
+```
+
+
+
+
+```{r}
+pheatmap(corMatrix, annotation_col= sampledata_Blood)
+```
+
+
+
+```{r}
+design_data_Blood<- model.matrix( ~0 +sampledata_Blood$source_name_ch1)
+# creating a matrix from treatment_group
+
+colnames(design_data_Blood)<- c("Control", "Unstressed_Fluoxetine_Treated", "Stressed_Fluoxetine_Treated", "Stressed")
+#changing column names (treated with fluoxitine)
+
+design_data_Blood
+```
+
+```{r}
+quantile(exprs(gse84_Blood))
+
+exprs_cutoff_Blood<- 4.654816
+
+genes_expressed_Blood <- exprs(gse84_Blood) > exprs_cutoff_Blood
+```
+
+
+
+```{r}
+genes_retained_Blood<- rowSums(genes_expressed_Blood)>3
+```
+
+
+```{r}
+table(genes_retained_Blood) 
+
+dim(genes_expressed_Blood)
+```
+
+
+
+
+```{r}
+lm_fit_Blood<- lmFit(exprs(gse84_Blood), design_data_Blood)
+
+head(lm_fit_Blood$coefficients)
+```
+
+```{r}
+contrasts_Blood <- makeContrasts(
+Stressed-Control, 
+  
+Unstressed_Fluoxetine_Treated - Control,
+Unstressed_Fluoxetine_Treated - Stressed_Fluoxetine_Treated,
+Unstressed_Fluoxetine_Treated- Stressed,
+
+Stressed_Fluoxetine_Treated - Control, 
+Stressed_Fluoxetine_Treated-Stressed, 
+
+levels = design_data_Blood)  
+
+#comparsions between the genes of the four groups 
+
+
+lm_fit_Blood_2 <- contrasts.fit(lm_fit_Blood, contrasts_Blood)
+lm_fit_Blood_2 <- eBayes(lm_fit_Blood_2)
+
+
+topTable(lm_fit_Blood_2)
+topTable1 <- topTable(lm_fit_Blood_2, coef=1)
+```
+
+
+
+```{r}
+summary(decideTests(lm_fit_Blood_2))
+table(decideTests(lm_fit_Blood_2))
+
+#view of the overall differnetial expression between the four groups 
+```
+
+
+WHOLE BLOOD GSEA!!!!!!
+
+
+```{r}
+fData(gse84_Blood)
+
+head(lm_fit_Blood_2)
+```
+
+
+```{r}
+gse84Blood_gene_annotation<- fData(gse84_Blood)
+head(gse84Blood_gene_annotation)
+
+gse84Blood_gene_annotation <- select(gse84Blood_gene_annotation,GENE_ID,GENE_SYMBOL)
+
+lm_fit_Blood_2$genes <- gse84Blood_gene_annotation
+topTable(lm_fit_Blood_2)
+
+gse84Blood_df <- topTable(lm_fit_Blood_2, coef=1, number = Inf)
+
+gse84Blood_df
+
+head(lm_fit_Blood_2$coefficients)
+
+all(rownames(fData(gse84_Blood))== rownames(lm_fit_Blood_2$coefficients))
+```
+
+
+```{r}
+gse84<- getGEO("GSE84185")
+
+```
+
+```{r}
+
+gse84_fdata<- (featureData(gse84[[1]]))
+
+gse84_genesymbol<- gse84_fdata@data$`GENE_SYMBOL`
+
+
+```
+
+
+```{r}
+#use match function 
+
+ gse84Blood_df$Symbol<-gse84_fdata$`GENE_SYMBOL` [match(gse84Blood_df$GENE_ID, gse84_fdata$GENE_ID)]
+
+```
+
+```{r}
+gse84Blood_df
+
+
+gse84Blood_df <- gse84Blood_df[!duplicated(gse84Blood_df$Symbol),]
+stat<- gse84Blood_df$t
+names(stat)<- gse84Blood_df$GENE_ID
+
+gse84Blood_df <- na.omit(gse84Blood_df)
+
+gse84Blood_df
+
+head(stat)
+```
+
+
+
+```{r}
+gmt.file <- system.file("extdata", "mouse.reactome.gmt", package="fgsea")
+rnk.file <- system.file("extdata", "naive.vs.th1.rnk", package="fgsea")
+```
+
+
+```{r}
+ranks<- read.table(rnk.file,
+                    header=TRUE, colClasses = c("character", "numeric"))
+ranks<- setNames(ranks$t, ranks$ID)# this is practice data
+str(ranks)
+
+pathways_Blood <- gmtPathways(gmt.file)
+
+head(ranks)
+```
+
+```{r}
+
+table(names(stat)%in%unlist(pathways_Blood))
+```
+
+
+```{r}
+fgseaResBlood <- fgsea(pathways_Blood, stat, minSize=5, maxSize=500)
+View(fgseaResBlood)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+Overall Diff Expression Results for Cingulate, Dentate, and Whole Blood 
+
+
+```{r}
+summary(decideTests(lm_fit_Dentate_2))
+table(decideTests(lm_fit_Dentate_2))
+
+#view of the overall differnetial expression between the three groups 
+```
+
+
+```{r}
+summary(decideTests(lm_fit_Cingulate_2))
+table(decideTests(lm_fit_Cingulate_2))
+
+#view of the overall differnetial expression between the four groups 
+```
+
+
+
+```{r}
+summary(decideTests(lm_fit_Blood_2))
+table(decideTests(lm_fit_Blood_2))
+
+#view of the overall differnetial expression between the four groups 
+```
+

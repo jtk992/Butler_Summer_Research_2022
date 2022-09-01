@@ -1,0 +1,225 @@
+---
+title: "GSE83386_Analysis"
+author: "Jack Karbowski"
+date: "6/29/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(GEOquery)
+library(tidyverse)
+library(BiocManager)
+library(limma)
+library(stringr)
+library(pheatmap)
+library(fgsea)
+library(data.table)
+```
+
+
+
+```{r}
+gse833<- getGEO("GSE83386")
+
+gse833
+
+head(featureData(gse833[[1]]))
+
+#downloading micro array data from omnibus
+```
+
+
+
+```{r}
+head((featureData(gse833[[1]])))
+
+
+View((featureData(gse833[[1]])))
+
+
+```
+
+
+```{r}
+length(gse833)
+gse833<- gse833[[1]]
+gse833
+
+#save gse833 as expression set 
+```
+
+
+```{r}
+pData(gse833) #sample info 
+exprs(gse833) [1,] #gene expression info
+```
+
+
+```{r}
+pData(gse833)$data_processing[1]
+
+#check how data was processed
+#seems like data was proccesed, but still has high values 
+```
+
+
+```{r}
+summary(exprs(gse833)) #check summary of gene expression data, this data looks like it has not been log transformed because of values above 16?
+
+
+exprs(gse833) <- log2(exprs(gse833))
+#log transform data 
+```
+
+
+```{r}
+#check the log transformed data, summary and visualization 
+
+summary(exprs(gse833))
+
+boxplot(exprs(gse833))
+```
+
+
+```{r}
+sampledata833<- pData(gse833) #save pData into data frame
+
+head(sampledata833)
+```
+
+```{r}
+table(sampledata833$characteristics_ch1.3) #table of responders
+
+```
+
+
+
+```{r}
+
+sampledata833<- dplyr::select(sampledata833,  characteristics_ch1.1, characteristics_ch1.2, characteristics_ch1.3 )
+
+#selecting columns that we need for analysis 
+```
+
+
+
+```{r}
+corMatrix<- cor(exprs(gse833), use = "c")
+pheatmap(corMatrix)
+
+#try to add col dat
+```
+
+
+
+```{r}
+rownames(sampledata833)
+colnames(corMatrix)
+
+#checking to see if rownames of sampledata833 match col names of corMatrix 
+```
+
+
+
+```{r}
+pheatmap(corMatrix, annotation_col= sampledata833)
+#use brackets, fix 
+```
+
+limma differential expression steps
+
+
+
+
+```{r}
+Cell_Line <- factor(sampledata833$characteristics_ch1.1)
+
+Response<- factor(sampledata833$characteristics_ch1.3)
+```
+
+
+
+```{r}
+quantile(exprs(gse833))
+
+exprs_cutoff<- 3.319040
+
+
+#removing genes that have low expression (helps prevent type 1 error I think)
+
+```
+
+
+```{r}
+genes_expressed <- exprs(gse833) > exprs_cutoff
+
+#saving the genes that fall above the median cutoff into genes_expressed
+```
+
+
+```{r}
+genes_retained<- rowSums(genes_expressed)>3
+
+#saving the genes that are expressed in more than three samples 
+```
+
+```{r}
+table(genes_retained) 
+
+dim(genes_expressed)
+
+#checking how many genes are removed, seems about right because of the 25% cutoff
+```
+
+```{r}
+gse833<-gse833[genes_retained,]
+#saving the genes we kept into the gse833 expression set 
+
+#might also want to check for extreme values in another chunk 
+```
+
+
+
+
+
+```{r}
+design_833<- model.matrix( ~Cell_Line +Response)
+
+colnames(design_833)<- c("Intercept","LCL10", "LCL2","LCL3", "LCL4" ,"LCL5", "LCL6", "LCL7", "LCL8", "LCL9", "Responder" )
+#changing column names (treated with fluoxitine)
+
+design_833
+```
+
+
+
+```{r}
+fit833<- lmFit(exprs(gse833), design_833)
+
+head(fit833$coefficients)
+```
+
+
+
+
+
+```{r}
+fit833_2 <- eBayes(fit833)
+
+
+topTable(fit833_2)
+topTable1 <- topTable(fit833_2, coef="Response")
+
+summary(decideTests(fit833_2))
+table(decideTests(fit833_2))
+
+topTable1
+
+
+```
+
